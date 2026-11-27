@@ -1,0 +1,11 @@
+{
+  "name": "sdlc-tickets",
+  "displayName": "SDLC Tickets",
+  "version": "0.1.0",
+  "description": "End-to-end SDLC workflow plugin: durable Ticket ledger across sessions, worktrees, and merges, phase-gated intent/spec/plan readiness workshops, atomic Git commits, and an interactive R&D kanban board.",
+  "suggestedPrompts": [
+    "Show the current Ticket kanban board and open work",
+    "Create a new feature Ticket and start intent-readiness",
+    "Check worktree health and ticket continuity before cleanup"
+  ]
+}

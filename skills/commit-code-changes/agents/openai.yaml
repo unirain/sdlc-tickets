@@ -1,0 +1,4 @@
+interface:
+  display_name: "Commit Code Changes"
+  short_description: "Group completed code changes into concise commits"
+  default_prompt: "Use $commit-code-changes to review completed code changes and commit them in logical groups with concise messages."

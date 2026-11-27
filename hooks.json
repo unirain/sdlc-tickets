@@ -1,0 +1,11 @@
+{
+  "sdlc-tickets": {
+    "SessionStart": [
+      {
+        "type": "command",
+        "command": "python3 \"./skills/manage-tickets/scripts/tickets.py\" hook --runtime antigravity",
+        "timeout": 15
+      }
+    ]
+  }
+}

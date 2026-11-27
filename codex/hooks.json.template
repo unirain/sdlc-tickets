@@ -1,0 +1,32 @@
+{
+  "description": "Route sessions to durable Tickets and preserve the bound assignment across context compaction.",
+  "hooks": {
+    "PreCompact": [
+      {
+        "matcher": "^(manual|auto)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"__TICKETS_SCRIPT__\" hook",
+            "timeout": 10,
+            "statusMessage": "Checkpointing ticket assignment"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "^(startup|resume|compact)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"__TICKETS_SCRIPT__\" hook",
+            "timeout": 15,
+            "statusMessage": "Loading ticket context",
+            "additionalContextLimit": 5000
+          }
+        ]
+      }
+    ]
+  }
+}

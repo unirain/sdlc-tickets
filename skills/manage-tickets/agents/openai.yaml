@@ -1,0 +1,6 @@
+interface:
+  display_name: "Ticket Ledger & Board"
+  short_description: "Route sessions to durable tickets across worktrees and render the R&D board"
+  default_prompt: "Use $manage-tickets to route this session to the right ticket, keep its progress continuous across worktrees and merges, or render the ticket board."
+policy:
+  allow_implicit_invocation: true

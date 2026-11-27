@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>研发 Ticket 看板</title>
+<style>
+  :root {
+    --bg: #f5f6f8; --panel: #ffffff; --ink: #1d2433; --muted: #6b7385; --line: #e3e6ec;
+    --plan: #6d5dfc; --exec: #0f8bff; --verify: #00a3a3; --done: #1f9d55; --hold: #e08a00;
+    --cancel: #9aa1ae; --warn: #d9480f; --chip: #eef0f4; --shadow: 0 1px 2px rgba(20,30,50,.06), 0 4px 14px rgba(20,30,50,.05);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.5 -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", Roboto, sans-serif; color: var(--ink); background: var(--bg); }
+  header { position: sticky; top: 0; z-index: 5; background: rgba(245,246,248,.94); backdrop-filter: blur(6px); border-bottom: 1px solid var(--line); padding: 14px 22px 12px; }
+  .title-row { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  h1 { font-size: 19px; margin: 0; letter-spacing: .2px; }
+  .meta { color: var(--muted); font-size: 12.5px; }
+  .stats { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+  .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 7px 13px; min-width: 92px; box-shadow: var(--shadow); }
+  .stat b { display: block; font-size: 20px; line-height: 1.2; }
+  .stat span { color: var(--muted); font-size: 12px; }
+  .stat.warn b { color: var(--warn); }
+  .toolbar { display: flex; gap: 10px; align-items: center; margin-top: 12px; flex-wrap: wrap; }
+  .toolbar input[type=search] { width: 280px; padding: 7px 11px; border: 1px solid var(--line); border-radius: 8px; font: inherit; background: #fff; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: #fff; }
+  .seg button { border: 0; background: transparent; padding: 6px 12px; font: inherit; cursor: pointer; color: var(--muted); }
+  .seg button.on { background: var(--ink); color: #fff; }
+  label.toggle { display: inline-flex; gap: 6px; align-items: center; color: var(--muted); cursor: pointer; user-select: none; }
+  .btn { border: 1px solid var(--line); background: #fff; border-radius: 8px; padding: 6px 12px; font: inherit; cursor: pointer; }
+  main { padding: 16px 22px 48px; max-width: 1680px; margin: 0 auto; }
+  .lane { background: #eceef2; border-radius: 14px; margin-bottom: 16px; border-top: 4px solid var(--lane); }
+  .lane-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 16px; }
+  .lane-head h2 { margin: 0; font-size: 16px; color: var(--lane); display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
+  .lane-head h2 .caret { display: inline-block; transition: transform .12s ease; color: var(--muted); font-size: 12px; }
+  .lane.collapsed .caret { transform: rotate(-90deg); }
+  .lane-head .count { background: #fff; border-radius: 999px; padding: 0 10px; font-size: 12.5px; color: var(--ink); }
+  .phase-filter { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+  .phase-filter button { border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 2px 10px; font: inherit; font-size: 12px; color: var(--muted); cursor: pointer; }
+  .phase-filter button.on { border-color: var(--lane); color: var(--lane); background: #fff; font-weight: 600; }
+  .phase-filter button:disabled { opacity: .45; cursor: default; }
+  .lane-tools { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .lane-tools .seg button { padding: 3px 10px; font-size: 12px; }
+  .lane-body { padding: 0 16px 14px; }
+  .lane.collapsed .lane-body { display: none; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 12px; align-items: start; }
+  .card { background: var(--panel); border-radius: 10px; padding: 11px 12px 10px; box-shadow: var(--shadow); cursor: pointer; border-left: 3px solid var(--accent, var(--line)); transition: transform .08s ease; min-width: 0; }
+  .card:hover { transform: translateY(-1px); }
+  .card.cancelled-card { opacity: .7; }
+  .card .top { display: flex; gap: 6px; align-items: center; }
+  .card .top .when { margin-left: auto; font-size: 11px; color: var(--muted); }
+  .card .name { font-weight: 600; font-size: 13.5px; line-height: 1.35; margin: 5px 0 2px; }
+  .card .id { font: 11.5px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); overflow-wrap: anywhere; }
+  .nowrap { white-space: nowrap; }
+  .chip { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--chip); color: var(--muted); white-space: nowrap; }
+  .chip.feature { background: #ece9ff; color: #5446d6; }
+  .chip.fix { background: #fff0e0; color: #b45f00; }
+  .chip.phase { background: #fff; border: 1px solid var(--accent, var(--line)); color: var(--accent, var(--muted)); }
+  .chip.branch { background: #e6f3ff; color: #0a6fd1; font-family: ui-monospace, Menlo, monospace; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+  .chip.warn { background: #ffe9e0; color: var(--warn); }
+  .chip.fu { background: #fff6d6; color: #8a6400; }
+  .chip.info { background: #eef2f7; color: #55607a; }
+  .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 7px; }
+  .progress { margin-top: 8px; display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--muted); }
+  .bar { flex: 1; height: 6px; background: #edf0f4; border-radius: 99px; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--accent, var(--exec)); border-radius: 99px; }
+  .next { margin-top: 7px; font-size: 12px; color: #3d4557; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .next::before { content: "下一步 · "; color: var(--muted); }
+  .foot { margin-top: 6px; font-size: 11px; color: var(--muted); display: flex; justify-content: space-between; }
+  .empty { color: var(--muted); font-size: 12.5px; padding: 6px 2px 2px; }
+  .more { margin-top: 12px; text-align: center; }
+  .done-table { background: #fff; border-radius: 10px; overflow: hidden; box-shadow: var(--shadow); }
+  .done-table tr.row { cursor: pointer; }
+  .done-table tr.row:hover td { background: #f7f9fc; }
+  .done-table tr.month td { background: #f3f5f8; font-weight: 600; color: var(--muted); font-size: 12px; }
+  .done-table .title { font-weight: 600; }
+  .hint { font-size: 12px; color: var(--muted); }
+  .scrim { position: fixed; inset: 0; background: rgba(20,25,35,.28); display: none; z-index: 9; }
+  .drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(720px, 94vw); background: #fff; z-index: 10; transform: translateX(100%); transition: transform .18s ease; overflow-y: auto; box-shadow: -10px 0 30px rgba(20,30,50,.14); }
+  .open .scrim { display: block; }
+  .open .drawer { transform: none; }
+  .drawer-head { position: sticky; top: 0; background: #fff; border-bottom: 1px solid var(--line); padding: 16px 22px 12px; }
+  .drawer-head h3 { margin: 6px 0 2px; font-size: 18px; }
+  .drawer-body { padding: 6px 22px 40px; }
+  .close { position: absolute; right: 16px; top: 14px; }
+  section h4 { font-size: 12.5px; letter-spacing: .4px; color: var(--muted); text-transform: uppercase; margin: 20px 0 8px; }
+  .steps { display: flex; gap: 4px; margin-top: 10px; }
+  .steps div { flex: 1; text-align: center; font-size: 11px; padding: 4px 0; border-radius: 6px; background: #f0f2f5; color: var(--muted); }
+  .steps div.past { background: #e3f4ea; color: var(--done); }
+  .steps div.now { background: var(--ink); color: #fff; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  td, th { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 500; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+  .pill { font-size: 11px; padding: 1px 8px; border-radius: 99px; background: var(--chip); }
+  .pill.Done { background: #e3f4ea; color: var(--done); }
+  .pill.InProgress { background: #e6f3ff; color: var(--exec); }
+  .pill.Blocked { background: #ffe9e0; color: var(--warn); }
+  .pill.Dropped { text-decoration: line-through; }
+  .pill.Open { background: #fff6d6; color: #8a6400; }
+  .timeline { list-style: none; padding: 0; margin: 0; border-left: 2px solid var(--line); }
+  .timeline li { position: relative; padding: 0 0 10px 14px; font-size: 12.5px; }
+  .timeline li::before { content: ""; position: absolute; left: -6px; top: 6px; width: 10px; height: 10px; border-radius: 50%; background: #fff; border: 2px solid var(--muted); }
+  .timeline li.offmain::before { border-color: var(--warn); }
+  .timeline time { color: var(--muted); font-size: 11.5px; margin-right: 6px; }
+  .box { background: #f7f8fa; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 13px; }
+  .box ul { margin: 6px 0 0; padding-left: 18px; }
+  .alert { background: #fff3ec; border: 1px solid #ffd2bd; color: #8f3209; border-radius: 10px; padding: 8px 12px; margin-top: 10px; font-size: 12.5px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="title-row">
+      <h1>研发 Ticket 看板</h1>
+      <span class="meta" id="meta"></span>
+    </div>
+    <div class="stats" id="stats"></div>
+    <div class="toolbar">
+      <input type="search" id="q" placeholder="搜索 ticket / 标题 / 分支 / 下一步">
+      <div class="seg" id="kind">
+        <button data-v="all" class="on">全部</button><button data-v="feature">Feature</button><button data-v="fix">Fix</button>
+      </div>
+      <label class="toggle"><input type="checkbox" id="activeOnly"> 只看有进行中分支的</label>
+      <label class="toggle"><input type="checkbox" id="warnOnly"> 只看有风险提示的</label>
+      <button class="btn" id="refresh" hidden>刷新</button>
+    </div>
+  </header>
+  <main>
+    <div id="lanes"></div>
+  </main>
+  <div class="scrim" id="scrim"></div>
+  <aside class="drawer" id="drawer"></aside>
+</div>
+<script>
+const DATA = /*__BOARD_DATA__*/null;
+const PHASES = ["Intent","Spec","Plan","Executing","Verifying","Done"];
+const PHASE_META = {
+  Intent: {label: "Intent 意图", color: "--plan"}, Spec: {label: "Spec 规格", color: "--plan"}, Plan: {label: "Plan 计划", color: "--plan"},
+  Executing: {label: "Executing 实施中", color: "--exec"}, Verifying: {label: "Verifying 验证中", color: "--verify"},
+  Done: {label: "Done 已完成", color: "--done"}, Cancelled: {label: "Cancelled 已取消", color: "--cancel"},
+  Paused: {label: "Paused 暂停", color: "--hold"}, Blocked: {label: "Blocked 阻塞", color: "--warn"},
+};
+const LANES = [
+  {key: "planned", label: "计划中", color: "--plan", phases: ["Intent", "Spec", "Plan"]},
+  {key: "active", label: "进行中", color: "--exec", phases: ["Executing", "Verifying"]},
+  {key: "done", label: "已完成", color: "--done", phases: ["Done"]},
+  {key: "hold", label: "暂停 · 阻塞", color: "--hold", phases: ["Paused", "Blocked"]},
+];
+const PERIODS = [["30", "近 30 天"], ["90", "近 90 天"], ["all", "全部"]];
+const saved = (() => { try { return JSON.parse(localStorage.getItem("ticketBoard") || "{}"); } catch (_) { return {}; } })();
+const state = {
+  data: DATA, q: "", kind: "all", activeOnly: false, warnOnly: false, selected: null,
+  collapsed: saved.collapsed || {}, lanePhase: {}, donePeriod: saved.donePeriod || "30",
+  doneView: saved.doneView || "cards", doneLimit: 12, withCancelled: false,
+};
+const persist = () => { try { localStorage.setItem("ticketBoard", JSON.stringify({collapsed: state.collapsed, donePeriod: state.donePeriod, doneView: state.doneView})); } catch (_) {} };
+const closedAt = (t) => { const h = (t.phase_history || []).filter((x) => x.phase === t.phase); return h.length ? h[h.length - 1].at : t.updated_at; };
+const days = (a, b) => Math.max(0, Math.round((new Date(b) - new Date(a)) / 86400000));
+const $ = (s) => document.querySelector(s);
+const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const warns = (t) => {
+  const out = [];
+  if (t.uncommitted && t.uncommitted.length) out.push("有未提交的 ticket 事件");
+  (t.problems || []).forEach((p) => out.push(p));
+  return out;
+};
+const slug = (v) => esc(v).replace(/-/g, "-<wbr>");
+function rel(iso) {
+  if (!iso) return "";
+  const s = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (s < 3600) return `${Math.max(1, Math.round(s / 60))} 分钟前`;
+  if (s < 86400) return `${Math.round(s / 3600)} 小时前`;
+  if (s < 86400 * 30) return `${Math.round(s / 86400)} 天前`;
+  return iso.slice(0, 10);
+}
+function matches(t) {
+  if (state.kind !== "all" && t.kind !== state.kind) return false;
+  if (state.activeOnly && !(t.active_branches || []).length) return false;
+  if (state.warnOnly && !warns(t).length) return false;
+  if (!state.q) return true;
+  const hay = [t.id, t.title, t.goal, t.summary, ...(t.next_steps || []), ...(t.active_branches || []), ...Object.keys(t.branches || {})].join(" ").toLowerCase();
+  return hay.includes(state.q.toLowerCase());
+}
+function card(t) {
+  const meta = PHASE_META[t.phase] || {label: t.phase, color: "--cancel"};
+  const accent = `var(${meta.color})`;
+  const closed = t.phase === "Done" || t.phase === "Cancelled";
+  const pct = t.task_total ? Math.round((t.task_done / t.task_total) * 100) : 0;
+  const next = closed ? "" : (t.latest_assignment && t.latest_assignment.next_steps && t.latest_assignment.next_steps[0]) || (t.next_steps || [])[0] || "";
+  const w = warns(t);
+  return `<div class="card${t.phase === "Cancelled" ? " cancelled-card" : ""}" style="--accent:${accent}" data-id="${esc(t.id)}">
+    <div class="top"><span class="chip phase">${esc(meta.label)}</span><span class="chip ${esc(t.kind)}">${esc(t.kind || "?")}</span>${closed ? `<span class="when">${t.phase === "Done" ? "完成" : "取消"}于 ${esc((closedAt(t) || "").slice(0, 10))}</span>` : ""}</div>
+    <div class="name">${esc(t.title)}</div>
+    <div class="id">${slug(t.id)}${t.parent ? ` · ↳ ${slug(t.parent)}` : ""}</div>
+    ${t.task_total ? `<div class="progress"><div class="bar"><i style="width:${pct}%"></i></div>${t.task_done}/${t.task_total}</div>` : ""}
+    <div class="chips">
+      ${(t.active_branches || []).map((b) => `<span class="chip branch" title="${esc(b)}">⎇ ${esc(b)}</span>`).join("")}
+      ${(t.open_followups || []).length ? `<span class="chip fu">${t.open_followups.length} 个 Follow-up</span>` : ""}
+      ${(t.children || []).length ? `<span class="chip">${t.children.length} 个子 ticket</span>` : ""}
+      ${t.not_on_main ? `<span class="chip info" title="${t.not_on_main} 条事件尚未进入 ${esc(state.data.main_branch)}">未合入 ${esc(state.data.main_branch)}</span>` : ""}
+      ${w.length ? `<span class="chip warn" title="${esc(w.join("；"))}">⚠ ${esc(w[0])}</span>` : ""}
+    </div>
+    ${next ? `<div class="next">${esc(next)}</div>` : ""}
+    <div class="foot"><span>${esc(rel(t.updated_at))}</span><span>${t.event_count} 条事件</span></div>
+  </div>`;
+}
+function render() {
+  const d = state.data;
+  if (!d) { $("#lanes").innerHTML = '<div class="empty">没有看板数据</div>'; return; }
+  const all = d.tickets || [];
+  const by = (pred) => all.filter(pred).length;
+  const planned = by((t) => ["Intent","Spec","Plan"].includes(t.phase));
+  const active = by((t) => ["Executing","Verifying"].includes(t.phase));
+  const done = by((t) => t.phase === "Done");
+  const hold = by((t) => ["Paused","Blocked"].includes(t.phase));
+  const fus = all.reduce((n, t) => n + (t.open_followups || []).length, 0);
+  const risky = by((t) => warns(t).length > 0);
+  const liveWt = (d.worktrees || []).filter((w) => w.exists).length;
+  $("#meta").textContent = `${d.repository} · 主干 ${d.main_branch} · ${liveWt} 个 worktree · ${(d.branches || []).length} 个本地分支 · 生成于 ${new Date(d.generated_at).toLocaleString()}`;
+  $("#stats").innerHTML = [
+    [all.length, "Ticket 总数"], [planned, "计划中"], [active, "进行中"], [done, "已完成"], [hold, "暂停/阻塞"],
+    [fus, "未完成 Follow-up"], [risky, "有风险提示", risky ? "warn" : ""],
+  ].map(([v, l, c]) => `<div class="stat ${c || ""}"><b>${v}</b><span>${l}</span></div>`).join("");
+  const visible = all.filter(matches);
+  $("#lanes").innerHTML = LANES.map((lane) => renderLane(lane, visible, all)).join("");
+  bindLanes();
+  document.querySelectorAll("[data-open]").forEach((el) => el.addEventListener("click", () => openDrawer(el.dataset.open)));
+  document.querySelectorAll(".card").forEach((el) => el.addEventListener("click", () => openDrawer(el.dataset.id)));
+  if (state.selected) openDrawer(state.selected, true);
+}
+
+const PHASE_ORDER = ["Intent", "Spec", "Plan", "Executing", "Verifying", "Paused", "Blocked", "Done", "Cancelled"];
+function laneItems(lane, visible) {
+  const phases = lane.key === "done" && state.withCancelled ? [...lane.phases, "Cancelled"] : lane.phases;
+  return visible.filter((t) => phases.includes(t.phase));
+}
+function renderLane(lane, visible, all) {
+  let items = laneItems(lane, visible);
+  const total = items.length;
+  const collapsed = !!state.collapsed[lane.key];
+  const phases = lane.key === "done" && state.withCancelled ? [...lane.phases, "Cancelled"] : lane.phases;
+  const active = state.lanePhase[lane.key];
+  if (active) items = items.filter((t) => t.phase === active);
+  let filters = "";
+  if (phases.length > 1) {
+    filters = `<div class="phase-filter" data-lane="${lane.key}"><button data-phase="" class="${active ? "" : "on"}">全部</button>${phases.map((p) => {
+      const n = laneItems(lane, visible).filter((t) => t.phase === p).length;
+      return `<button data-phase="${p}" class="${active === p ? "on" : ""}" ${n ? "" : "disabled"}>${esc(PHASE_META[p].label)} · ${n}</button>`;
+    }).join("")}</div>`;
+  }
+  let tools = "", body = "";
+  if (lane.key === "done") {
+    const searching = !!state.q;
+    if (!searching && state.donePeriod !== "all") {
+      const cutoff = Date.now() - Number(state.donePeriod) * 86400000;
+      items = items.filter((t) => new Date(closedAt(t)).getTime() >= cutoff);
+    }
+    items.sort((a, b) => (closedAt(b) || "").localeCompare(closedAt(a) || ""));
+    tools = `<div class="lane-tools">
+      ${searching ? '<span class="hint">搜索中：显示全部时间范围</span>' : `<div class="seg" data-role="period">${PERIODS.map(([v, l]) => `<button data-v="${v}" class="${state.donePeriod === v ? "on" : ""}">${l}</button>`).join("")}</div>`}
+      <div class="seg" data-role="view"><button data-v="cards" class="${state.doneView === "cards" ? "on" : ""}">卡片</button><button data-v="list" class="${state.doneView === "list" ? "on" : ""}">列表</button></div>
+      <label class="toggle"><input type="checkbox" data-role="cancelled" ${state.withCancelled ? "checked" : ""}> 含已取消</label>
+    </div>`;
+    body = state.doneView === "list" ? doneTable(items) : cardGrid(items, true);
+  } else {
+    items.sort((a, b) => PHASE_ORDER.indexOf(a.phase) - PHASE_ORDER.indexOf(b.phase) || (b.updated_at || "").localeCompare(a.updated_at || ""));
+    body = cardGrid(items, false);
+  }
+  const shown = lane.key === "done" && items.length !== total ? `${items.length} / ${total}` : `${total}`;
+  return `<section class="lane${collapsed ? " collapsed" : ""}" style="--lane:var(${lane.color})" data-lane="${lane.key}">
+    <div class="lane-head"><h2 data-toggle="${lane.key}"><span class="caret">▼</span>${lane.label}<span class="count">${shown}</span></h2>${collapsed ? "" : filters}${collapsed ? "" : tools}</div>
+    <div class="lane-body">${body}</div>
+  </section>`;
+}
+function cardGrid(items, limited) {
+  if (!items.length) return '<div class="empty">暂无</div>';
+  const cut = limited ? items.slice(0, state.doneLimit) : items;
+  const rest = items.length - cut.length;
+  return `<div class="grid">${cut.map(card).join("")}</div>${rest > 0 ? `<div class="more"><button class="btn" data-role="more">再显示 ${Math.min(rest, 24)} 条（还有 ${rest} 条）</button> <button class="btn" data-role="aslist">切换为列表查看全部</button></div>` : ""}`;
+}
+function doneTable(items) {
+  if (!items.length) return '<div class="empty">暂无</div>';
+  let month = "", rows = "";
+  for (const t of items) {
+    const at = closedAt(t) || "";
+    if (at.slice(0, 7) !== month) { month = at.slice(0, 7); rows += `<tr class="month"><td colspan="6">${esc(month)} · ${items.filter((x) => (closedAt(x) || "").startsWith(month)).length} 个</td></tr>`; }
+    const merged = Object.entries(t.branches || {}).filter(([, v]) => v.integrated_at).map(([b]) => b);
+    rows += `<tr class="row" data-open="${esc(t.id)}">
+      <td class="nowrap mono">${esc(at.slice(0, 10))}</td>
+      <td><div class="title">${esc(t.title)}</div><div class="id">${slug(t.id)}${t.phase === "Cancelled" ? " · 已取消" : ""}</div></td>
+      <td><span class="chip ${esc(t.kind)}">${esc(t.kind || "?")}</span></td>
+      <td class="nowrap">${t.task_total ? `${t.task_done}/${t.task_total}` : "-"}</td>
+      <td class="mono">${esc(merged.join(", ") || "-")}</td>
+      <td class="nowrap">${t.created_at ? `${days(t.created_at, at)} 天` : "-"}</td>
+    </tr>`;
+  }
+  return `<div class="done-table"><table><tr><th>完成日期</th><th>Ticket</th><th>类型</th><th>任务</th><th>已合入分支</th><th>周期</th></tr>${rows}</table></div>`;
+}
+function bindLanes() {
+  document.querySelectorAll("[data-toggle]").forEach((el) => el.addEventListener("click", () => {
+    const k = el.dataset.toggle; state.collapsed[k] = !state.collapsed[k]; persist(); render();
+  }));
+  document.querySelectorAll(".phase-filter button").forEach((b) => b.addEventListener("click", () => {
+    state.lanePhase[b.parentElement.dataset.lane] = b.dataset.phase || null; render();
+  }));
+  document.querySelectorAll('[data-role="period"] button').forEach((b) => b.addEventListener("click", () => { state.donePeriod = b.dataset.v; state.doneLimit = 12; persist(); render(); }));
+  document.querySelectorAll('[data-role="view"] button').forEach((b) => b.addEventListener("click", () => { state.doneView = b.dataset.v; persist(); render(); }));
+  document.querySelectorAll('[data-role="cancelled"]').forEach((c) => c.addEventListener("change", () => { state.withCancelled = c.checked; render(); }));
+  document.querySelectorAll('[data-role="more"]').forEach((b) => b.addEventListener("click", () => { state.doneLimit += 24; render(); }));
+  document.querySelectorAll('[data-role="aslist"]').forEach((b) => b.addEventListener("click", () => { state.doneView = "list"; persist(); render(); }));
+}
+function list(items, empty = "无") { return items && items.length ? `<ul>${items.map((i) => `<li>${esc(i)}</li>`).join("")}</ul>` : `<div class="meta">${empty}</div>`; }
+function openDrawer(id, silent) {
+  const t = (state.data.tickets || []).find((x) => x.id === id);
+  if (!t) return closeDrawer();
+  state.selected = id;
+  const idx = PHASES.indexOf(t.phase);
+  const steps = PHASES.map((p, i) => `<div class="${i < idx ? "past" : i === idx ? "now" : ""}">${p}</div>`).join("");
+  const w = warns(t);
+  const m = t.mandate;
+  const tasks = Object.entries(t.tasks || {}).sort(([a], [b]) => a.localeCompare(b));
+  const fus = Object.entries(t.followups || {}).sort(([a], [b]) => a.localeCompare(b));
+  const branches = Object.entries(t.branches || {});
+  const a = t.latest_assignment;
+  $("#drawer").innerHTML = `
+    <div class="drawer-head">
+      <button class="btn close" id="closeBtn">关闭</button>
+      <span class="chip ${esc(t.kind)}">${esc(t.kind || "?")}</span> <span class="chip">${esc(t.phase)}</span>
+      <h3>${esc(t.title)}</h3>
+      <div class="id">${esc(t.id)}${t.parent ? ` · 父 ticket ${esc(t.parent)}` : ""} · 创建 ${esc((t.created_at || "").slice(0, 10))} · 更新 ${esc(rel(t.updated_at))}</div>
+      <div class="steps">${steps}</div>
+      ${w.length ? `<div class="alert">⚠ ${w.map(esc).join("<br>⚠ ")}</div>` : ""}
+      ${t.not_on_main ? `<div class="meta" style="margin-top:8px">ℹ ${t.not_on_main} 条事件尚未进入 ${esc(state.data.main_branch)}（仍在分支或 worktree 上）</div>` : ""}
+    </div>
+    <div class="drawer-body">
+      ${t.goal ? `<section><h4>目标</h4><div class="box">${esc(t.goal)}</div></section>` : ""}
+      <section><h4>当前进展</h4><div class="box">
+        <b>里程碑交接：</b>${esc(t.summary || "（暂无）")}
+        ${t.next_steps && t.next_steps.length ? `<div style="margin-top:6px"><b>下一步</b>${list(t.next_steps)}</div>` : ""}
+        ${t.blockers && t.blockers.length ? `<div style="margin-top:6px;color:var(--warn)"><b>阻塞</b>${list(t.blockers)}</div>` : ""}
+      </div></section>
+      ${a ? `<section><h4>最近一次 Assignment（本地）</h4><div class="box">
+        <div class="meta mono">${esc(a.id)} · ${esc(a.status)} · ${esc(a.branch || "-")} · ${esc(rel(a.updated_at))}</div>
+        <div style="margin-top:4px">${esc(a.summary || "（无摘要）")}</div>
+        ${a.next_steps && a.next_steps.length ? `<div style="margin-top:6px"><b>下一步</b>${list(a.next_steps)}</div>` : ""}
+        ${a.blockers && a.blockers.length ? `<div style="margin-top:6px;color:var(--warn)"><b>阻塞</b>${list(a.blockers)}</div>` : ""}
+      </div></section>` : ""}
+      <section><h4>Mandate 授权边界</h4>${m ? `${(m.docs || []).length ? `<table><tr><th>文档</th><th>状态</th><th>SHA-256</th></tr>
+        ${m.docs.map((d) => `<tr><td class="mono">${esc(d.path)}</td><td>${esc(d.status || "")}</td><td class="mono">${esc((d.sha256 || "").slice(0, 12))}</td></tr>`).join("")}
+        </table>` : ""}${m.note ? `<div class="box" style="margin-top:6px">${esc(m.note)}</div>` : ""}<div class="meta" style="margin-top:6px">基线 ${esc(m.base || "?")} · 记录于 ${esc((m.at || "").slice(0, 10))}${(m.tasks || []).length ? ` · 已放行 ${esc(m.tasks.join(", "))}` : ""}</div>` : '<div class="meta">尚未记录</div>'}</section>
+      <section><h4>任务 (${t.task_done}/${t.task_total})</h4>${tasks.length ? `<table>${tasks.map(([k, v]) => `<tr><td class="mono">${esc(k)}</td><td><span class="pill ${esc(v.status)}">${esc(v.status)}</span></td><td>${esc(v.note || "")}</td><td class="meta">${esc(v.branch || "")}</td></tr>`).join("")}</table>` : '<div class="meta">无</div>'}</section>
+      ${fus.length ? `<section><h4>Follow-ups</h4><table>${fus.map(([k, v]) => `<tr><td class="mono">${esc(k)}</td><td><span class="pill ${esc(v.status)}">${esc(v.status)}</span></td><td>${esc(v.title)}</td></tr>`).join("")}</table></section>` : ""}
+      ${(t.children || []).length ? `<section><h4>子 ticket</h4>${t.children.map((c) => `<span class="chip" style="cursor:pointer" data-goto="${esc(c)}">${esc(c)}</span>`).join(" ")}</section>` : ""}
+      <section><h4>分支 / Worktree</h4>${branches.length ? `<table><tr><th>分支</th><th>基线</th><th>任务</th><th>合入</th></tr>${branches.map(([b, v]) => `<tr><td class="mono">${esc(b)}</td><td class="mono">${esc(v.base || "")}</td><td>${esc((v.tasks || []).join(", "))}</td><td class="nowrap">${v.integrated_at ? `✅ ${esc(v.into || "")} ${esc((v.commit || "").slice(0, 8))}` : "进行中"}</td></tr>`).join("")}</table>` : '<div class="meta">无</div>'}</section>
+      ${(t.decisions || []).length ? `<section><h4>决策</h4>${list(t.decisions.map((d) => `${d.at.slice(0, 10)} ${d.text}`))}</section>` : ""}
+      <section><h4>事件时间线</h4><ul class="timeline">${(t.timeline || []).slice().reverse().map((e) => `<li class="${e.on_main ? "" : "offmain"}"><time>${esc(e.at.replace("T", " ").slice(0, 16))}</time>${esc(e.text)}${e.branch ? ` <span class="meta">@${esc(e.branch)}</span>` : ""}</li>`).join("")}</ul>
+      <div class="meta" style="margin-top:6px">橙色圆点 = 该事件尚未进入 ${esc(state.data.main_branch)}</div></section>
+    </div>`;
+  document.body.classList.add("open");
+  $("#closeBtn").onclick = closeDrawer;
+  document.querySelectorAll("[data-goto]").forEach((el) => el.addEventListener("click", () => openDrawer(el.dataset.goto)));
+  if (!silent) $("#drawer").scrollTop = 0;
+}
+function closeDrawer() { state.selected = null; document.body.classList.remove("open"); }
+$("#scrim").onclick = closeDrawer;
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDrawer(); });
+$("#q").addEventListener("input", (e) => { state.q = e.target.value.trim(); render(); });
+$("#activeOnly").addEventListener("change", (e) => { state.activeOnly = e.target.checked; render(); });
+$("#warnOnly").addEventListener("change", (e) => { state.warnOnly = e.target.checked; render(); });
+document.querySelectorAll("#kind button").forEach((b) => b.addEventListener("click", () => {
+  document.querySelectorAll("#kind button").forEach((x) => x.classList.toggle("on", x === b));
+  state.kind = b.dataset.v; render();
+}));
+async function reload() {
+  try { const r = await fetch("data.json", {cache: "no-store"}); if (r.ok) { state.data = await r.json(); render(); } } catch (_) {}
+}
+if (state.data && state.data.live) {
+  $("#refresh").hidden = false; $("#refresh").onclick = reload; setInterval(reload, 30000);
+}
+render();
+</script>
+</body>
+</html>

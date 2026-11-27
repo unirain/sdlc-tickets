@@ -59,7 +59,7 @@
 
 ### 1. 安装到指定项目（推荐，仅对该仓库生效）
 
-将插件安装到目标仓库的 `.agents/plugins/sdlc-tickets/`，Antigravity 只在该工作区加载，团队成员和新建 worktree 也能直接共用同一版本：
+将插件安装到目标仓库的 `.agents/plugins/sdlc-tickets/`，Antigravity 只在该工作区加载，团队成员和新建 worktree 也能直接共用同一版本。安装目录同时包含 Claude Code 清单，但 Claude Code 不会自动发现 `.agents/plugins/`，各运行时的启用方式不同：
 
 ```bash
 git clone https://github.com/unirain/sdlc-tickets.git
@@ -68,6 +68,7 @@ git clone https://github.com/unirain/sdlc-tickets.git
 
 - **Antigravity**：自动发现并启用 `.agents/plugins/sdlc-tickets/`（含 5 个 skill、规则和 `SessionStart` Hook）。
 - **Codex**：加 `--with-codex-hooks` 会同步生成 `.codex/hooks.json` 指向已安装的插件脚本；首次在 Codex 打开该仓库时运行一次 `/hooks` 信任即可。
+- **Claude Code**：安装目录已带 `.claude-plugin/` 与 `hooks/hooks.json`，但不会自动生效。个人可临时加载 `claude --plugin-dir .agents/plugins/sdlc-tickets`；团队请用第 3 节的「Claude Code 市场安装」，把 `enabledPlugins` 写进项目 `.claude/settings.json`，避免依赖本机绝对路径。
 
 ### 2. 全局安装（可选，仅 Antigravity）
 
@@ -81,7 +82,7 @@ git clone https://github.com/unirain/sdlc-tickets.git
 
 ### 3. Claude Code
 
-仓库根目录已包含 Claude Code 原生清单（`.claude-plugin/` 与 `hooks/hooks.json`），安装后自动注册 5 个 skill 与 2 个 Hook。
+仓库根目录已包含 Claude Code 原生清单（`.claude-plugin/` 与 `hooks/hooks.json`），安装后自动注册 5 个 skill 与 2 个 Hook。注意第 1 节的 `install.sh --project` 只是把清单复制到 `.agents/plugins/`，并不注册 Claude Code 插件——Claude Code 只从市场、`--plugin-dir` 或 `~/.claude/skills` 加载。
 
 #### 安装
 

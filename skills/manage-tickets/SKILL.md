@@ -96,7 +96,9 @@ Record outcomes, not narration; label assumptions; reference repository files in
 
 ## 6. Kanban board
 
-- `board [--output path]` writes a self-contained HTML board (default `.codex/tickets/board/index.html`) with four stacked, collapsible lanes — 计划中 (Intent/Spec/Plan), 进行中 (Executing/Verifying), 已完成, 暂停·阻塞 — each a wrapping card grid with phase filter chips, task progress, active branches, open follow-ups, and not-on-main badges. The 已完成 lane scales to many tickets: period filter (30/90 days/all), 12 cards then "show more", a month-grouped list view, and an include-cancelled toggle. A detail drawer shows mandate, tasks, branches, timeline, and the latest assignment.
+For the usual "show me the board" request, invoke the [board](../board/SKILL.md) skill, which renders and opens it in one step (`board --open`).
+
+- `board [--output path] [--open]` writes a self-contained HTML board (default `.codex/tickets/board/index.html`) with four stacked, collapsible lanes — 计划中 (Intent/Spec/Plan), 进行中 (Executing/Verifying), 已完成, 暂停·阻塞 — each a wrapping card grid with phase filter chips, task progress, active branches, open follow-ups, and not-on-main badges. The 已完成 lane scales to many tickets: period filter (30/90 days/all), 12 cards then "show more", a month-grouped list view, and an include-cancelled toggle. A detail drawer shows mandate, tasks, branches, timeline, and the latest assignment. `--open` opens the result and reports `opened` in the JSON reply; `TICKETS_OPENER` overrides the viewer command.
 - `serve [--port 8765]` serves a live board on `127.0.0.1` that rebuilds on every request; run it as a background process.
 - To publish: when the runtime offers an artifact/page publishing tool (for example Antigravity's `publish_artifact`), publish the generated HTML and reuse the same artifact id on later updates (store it in `.codex/tickets/board/artifact.json`). Otherwise open the file or use `serve`.
 

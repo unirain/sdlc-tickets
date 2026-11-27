@@ -1561,13 +1561,37 @@ def render_board(payload: dict[str, Any]) -> str:
     return template.replace("/*__BOARD_DATA__*/null", data)
 
 
+def open_board(path: Path) -> bool:
+    """Open a rendered board in the default viewer. Returns False when unavailable."""
+    opener = os.environ.get("TICKETS_OPENER")
+    if opener:
+        command = [opener, str(path)]
+    elif sys.platform == "darwin":
+        command = ["open", str(path)]
+    elif os.name == "nt":
+        command = ["cmd", "/c", "start", "", str(path)]
+    else:
+        command = ["xdg-open", str(path)]
+    try:
+        result = subprocess.run(
+            command, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        )
+    except OSError:
+        return False
+    return result.returncode == 0
+
+
 def cmd_board(ctx: Context, args: argparse.Namespace) -> dict[str, Any]:
     payload = board_payload(ctx)
     output = Path(args.output).expanduser().resolve() if args.output else ctx.state_dir / "board" / "index.html"
     atomic_write_text(output, render_board(payload), private=False)
     if args.json_output:
         atomic_write_json(Path(args.json_output).expanduser().resolve(), payload, private=False)
-    return {"output": str(output), "tickets": len(payload["tickets"])}
+    return {
+        "output": str(output),
+        "tickets": len(payload["tickets"]),
+        "opened": open_board(output) if args.open else None,
+    }
 
 
 def cmd_serve(ctx: Context, args: argparse.Namespace) -> None:
@@ -1726,6 +1750,7 @@ def build_parser() -> argparse.ArgumentParser:
     board = sub.add_parser("board", help="Render the self-contained kanban HTML.")
     board.add_argument("--output")
     board.add_argument("--json-output")
+    board.add_argument("--open", action="store_true", help="Open the board after rendering.")
 
     serve = sub.add_parser("serve", help="Serve a live board on 127.0.0.1.")
     serve.add_argument("--port", type=int, default=8765)

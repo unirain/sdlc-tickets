@@ -1,6 +1,6 @@
 # SDLC Tickets (`sdlc-tickets`)
 
-面向 **Antigravity** 与 **Codex** 的端到端 **SDLC 研发流程插件**：用长期存在的 **Ticket 账本** 替代一次性 session 快照，让需求与修复在多 session、多 Git worktree、并行分支、合入主干与上下文压缩之间保持连续；内置 `Intent → Spec → Plan` 三阶段人工门禁、规范化原子提交以及研发可视化看板。
+面向 **Antigravity** 与 **Codex** 与 **Claude Code** 的端到端 **SDLC 研发流程插件**：用长期存在的 **Ticket 账本** 替代一次性 session 快照，让需求与修复在多 session、多 Git worktree、并行分支、合入主干与上下文压缩之间保持连续；内置 `Intent → Spec → Plan` 三阶段人工门禁、规范化原子提交以及研发可视化看板。
 
 ## 解决什么问题
 
@@ -31,7 +31,10 @@
 |---|---|
 | `plugin.json` | Antigravity 插件清单（`sdlc-tickets`）。 |
 | `hooks.json` | Antigravity `SessionStart` Hook：根据 stdin 中的 `cwd` / `workspacePaths` 定位目标仓库并注入当前绑定 Ticket 或开放 Ticket 简表；非 Git 目录静默跳过。 |
-| `rules/AGENTS.md` | 通用 SDLC 路由、阶段门禁与提交约束规则（启用插件即生效）。 |
+| `.claude-plugin/plugin.json` | Claude Code 插件清单（`skills/` 自动发现；含 `displayName`、关键词等元数据）。 |
+| `.claude-plugin/marketplace.json` | Claude Code 市场清单，支持 `/plugin marketplace add unirain/sdlc-tickets` 与 `/plugin install sdlc-tickets@unirain`。 |
+| `hooks/hooks.json` | Claude Code 的 `SessionStart`（`startup\|resume\|clear\|compact\|fork`）与 `PreCompact`（`manual\|auto`）Hook，通过 `${CLAUDE_PLUGIN_ROOT}` 定位脚本；规则文本随 Ticket 上下文注入；非 Git 目录静默跳过。 |
+| `rules/AGENTS.md` | 通用 SDLC 路由、阶段门禁与提交约束规则（Antigravity 启用插件即生效；Claude Code 由 `SessionStart` Hook 注入同一份文本）。 |
 | `skills/manage-tickets/` | Ticket 账本 CLI（`scripts/tickets.py`，零第三方依赖、纯 Python 标准库）、worktree 清理前检查 `doctor`、以及自包含 HTML 研发看板（`assets/board.html`）。 |
 | `skills/intent-readiness/` | 意图访谈、结构化校验与人工批准门禁（产出 `intent.md`）。 |
 | `skills/spec-readiness/` | 技术规格工作坊、一致性校验与人工批准门禁（产出 `spec.md`）。 |
@@ -76,17 +79,87 @@ git clone https://github.com/unirain/sdlc-tickets.git
 
 安装到 `~/.gemini/config/plugins/sdlc-tickets/`。
 
+### 3. Claude Code
+
+仓库根目录已包含 Claude Code 原生清单（`.claude-plugin/` 与 `hooks/hooks.json`），安装后自动注册 5 个 skill 与 2 个 Hook。
+
+#### 安装
+
+```bash
+# 一步安装（自动添加市场，需 Claude Code 2.1.275+）
+/plugin install sdlc-tickets --marketplace unirain/sdlc-tickets
+
+# 或分两步安装
+/plugin marketplace add unirain/sdlc-tickets
+/plugin install sdlc-tickets@unirain
+
+# 或临时加载本地副本（开发调试，不写入设置）
+claude --plugin-dir /path/to/sdlc-tickets
+```
+
+安装后可用 `claude plugin list` 确认已启用，`claude plugin details sdlc-tickets` 查看注册了哪些 skill 与 Hook。
+
+团队协作：把下面两项加入项目 `.claude/settings.json` 并提交；每位成员克隆后执行一次 `claude plugin install sdlc-tickets@unirain --scope project`。
+
+```json
+{
+  "extraKnownMarketplaces": {
+    "unirain": {
+      "source": {
+        "source": "github",
+        "repo": "unirain/sdlc-tickets"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "sdlc-tickets@unirain": true
+  }
+}
+```
+
+#### 在会话中如何使用
+
+1. **会话开始即自动接管。** `SessionStart`（`startup` / `resume` / `clear` / `compact` / `fork`）会注入：当前 worktree 与分支、本 session 的 id、可直接复制的路由命令、开放 Ticket 简表（已绑定时改为该 Ticket 的状态、任务与最近交接），以及插件规则（路由、阶段门禁、提交约束）。非 Git 目录静默跳过；纯问答保持未绑定，不写任何文件。
+2. **先路由，再改代码。** 按注入的提示让 Claude `attach` 已有 Ticket 或 `new` 一条新的；注入的命令已带本 session id，可直接复制：
+
+```bash
+# 形如（路径随插件安装位置而定，`--plugin-dir` 模式下指向本地仓库）
+python3 ~/.claude/plugins/cache/unirain/sdlc-tickets/0.1.0/skills/manage-tickets/scripts/tickets.py attach checkin-flow --session <session-id>
+```
+
+3. **按阶段门禁推进。** `feature` Ticket 依次走 `intent-readiness` → `spec-readiness` → `plan-readiness`，每个门禁都停在你明确批准之后；`fix` 直接从 `Executing` 开始。5 个 skill 也可显式调用（Claude Code 中带插件前缀）：
+
+| Skill | 调用 | 用途 |
+|---|---|---|
+| `manage-tickets` | `/sdlc-tickets:manage-tickets` | 建单、绑定、交接、里程碑、看板 |
+| `intent-readiness` | `/sdlc-tickets:intent-readiness` | 意图访谈与人工批准（产出 `intent.md`） |
+| `spec-readiness` | `/sdlc-tickets:spec-readiness` | 技术规格工作坊与人工批准（产出 `spec.md`） |
+| `plan-readiness` | `/sdlc-tickets:plan-readiness` | 依赖拆解、并行 lane 规划（产出 `plan.md`） |
+| `commit-code-changes` | `/sdlc-tickets:commit-code-changes` | 原子提交，Ticket 事件随代码同一 commit |
+
+4. **压缩前后不丢线。** `PreCompact` 在压缩前把绑定与交接写入 `.codex/tickets/checkpoints/`，且在 Claude Code 下不输出任何内容，避免被当作压缩摘要的指令；压缩后 `SessionStart`（`source: compact`）立即恢复该 Ticket 的上下文。
+5. **提交与合入。** 用 `commit-code-changes` 提交，`docs/plans/<id>/ticket-events/*.json` 与对应代码放在同一个 commit，永远不要提交 `.codex/tickets/`；合回主干后执行 `integrate`。
+6. **看板。** 直接说“打开 ticket 看板”，或用注入内容里的脚本路径：
+
+```bash
+$TICKETS board    # 生成静态 HTML（.codex/tickets/board/index.html）
+$TICKETS serve --port 8765  # 实时看板 http://127.0.0.1:8765/
+```
+
+> 排查：没有看到注入内容时，确认 `claude plugin list` 中插件为 enabled、当前目录在 Git 仓库内，并用 `/hooks` 查看 Hook 是否已加载。
+
 ## 常用命令
 
 所有命令仅依赖系统 `python3`（无需安装额外依赖），可在目标仓库任意 worktree 下直接运行：
 
 ```bash
 TICKETS="python3 .agents/plugins/sdlc-tickets/skills/manage-tickets/scripts/tickets.py"
+# Claude Code 下脚本位于插件缓存目录，用 `SessionStart` 注入内容里的绝对路径即可
 
 # 查看 Ticket
 $TICKETS list                     # 查看所有开放中的 Ticket
 $TICKETS list --all               # 查看全部（含 Done / Cancelled）
-$TICKETS show <ticket-id>         # 查看详情、Mandate、任务清单与最近交接
+$TICKETS show <ticket-id>       # 查看详情、Mandate、任务清单与最近交接
 
 # 建单、绑定与交接
 $TICKETS new <slug> --title "..." --goal "..." --attach --session <sid>

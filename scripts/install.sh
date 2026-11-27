@@ -67,6 +67,8 @@ copy_plugin() {
   mkdir -p "$dest"
   cp "$SOURCE_DIR/plugin.json" "$dest/plugin.json"
   cp "$SOURCE_DIR/hooks.json" "$dest/hooks.json"
+ cp -R "$SOURCE_DIR/.claude-plugin" "$dest/.claude-plugin"
+ cp -R "$SOURCE_DIR/hooks" "$dest/hooks"
   cp -R "$SOURCE_DIR/rules" "$dest/rules"
   cp -R "$SOURCE_DIR/skills" "$dest/skills"
   find "$dest" -name "__pycache__" -type d -exec rm -rf {} +

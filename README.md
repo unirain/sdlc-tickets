@@ -1,119 +1,125 @@
 # SDLC Tickets (`sdlc-tickets`)
 
-An end-to-end **SDLC workflow plugin** for **Antigravity** and **Codex** that replaces disposable per-session task notes with a durable **Ticket ledger** — keeping work continuous across sessions, Git worktrees, parallel branches, merges, and context compaction, paired with phase-gated `Intent → Spec → Plan` workshops, clean atomic commits, and a built-in R&D kanban board.
+面向 **Antigravity** 与 **Codex** 的端到端 **SDLC 研发流程插件**：用长期存在的 **Ticket 账本** 替代一次性 session 快照，让需求与修复在多 session、多 Git worktree、并行分支、合入主干与上下文压缩之间保持连续；内置 `Intent → Spec → Plan` 三阶段人工门禁、规范化原子提交以及研发可视化看板。
 
-## Why
+## 解决什么问题
 
-In an AI-assisted `intent → spec → plan → task` workflow, sessions proliferate quickly. Tracking state per session forces humans to manually remember which session belongs to which plan, breaks across Git worktrees, and causes merge conflicts on shared state files.
+在 AI 辅助的 `intent → spec → plan → task` 研发流程里，session 会越开越多。如果按 session 记任务状态，很容易出现：
 
-`sdlc-tickets` shifts the unit of continuity from **session** to **Ticket**:
+- 每次新开 session 都要人工回忆“这轮对话应该接上之前哪个 plan”；
+- 多 session / 多 worktree 并行实施时，单一状态文件互相覆盖，合并时产生冲突；
+- 删掉 worktree 或切换分支后，进度和交接上下文容易丢失。
+
+`sdlc-tickets` 把管理单位从 **session** 提升为 **Ticket**（1 条长期工作线 = 1 张 Ticket）：
 
 ```text
-Session starts (Antigravity / Codex Hook)
-  └─▶ Route session before editing code/docs:
-        ├─ Pure Q&A / unrelated chat ──▶ Stay unbound (no files written)
-        ├─ Existing work line        ──▶ attach <ticket-id> (or open Follow-up FU-001)
-        └─ New work line             ──▶ new <ticket-id>
-              ├─ feature: Intent ──▶ intent-readiness ──(approve)──▶ Spec
-              │            Spec  ──▶ spec-readiness   ──(approve)──▶ Plan
-              │            Plan  ──▶ plan-readiness   ──(approve)──▶ Executing
-              │            Executing ──▶ worktree/branch ──▶ TASK commits ──▶ Verifying ──▶ integrate ──▶ Done
-              └─ fix:      Executing ──▶ implement & verify ──▶ Done
+启动新 Session（Antigravity / Codex Hook 只读注入开放 Ticket 简表）
+  └─▶ 修改代码或文档前先做归属路由：
+        ├─ 纯问答 / 闲聊 / 问别的项目 ──▶ 保持未绑定，不写任何文件
+        ├─ 延续已有工作线             ──▶ attach <ticket-id>（或在父 Ticket 下挂 Follow-up FU-001）
+        └─ 开启全新工作线             ──▶ new <ticket-id>
+              ├─ feature：Intent ──▶ intent-readiness ──(人工批准)──▶ Spec
+              │           Spec   ──▶ spec-readiness   ──(人工批准)──▶ Plan
+              │           Plan   ──▶ plan-readiness   ──(人工批准)──▶ Executing
+              │           Executing ──▶ 开 worktree/分支 ──▶ TASK 随代码提交 ──▶ Verifying ──▶ integrate ──▶ Done
+              └─ fix：    Executing ──▶ 跳过 readiness，直接实施验证 ──▶ Done
 ```
 
-## What's Inside
+## 插件包含内容
 
-| Component | Purpose |
+| 组件 | 作用 |
 |---|---|
-| `plugin.json` | Antigravity plugin manifest (`sdlc-tickets`). |
-| `hooks.json` | Antigravity `SessionStart` hook — injects open Tickets / bound Ticket context (auto-detects target workspace from `cwd` / `workspacePaths`, silently no-ops outside Git repos). |
-| `rules/AGENTS.md` | Concise, always-on SDLC routing & phase-gating rules. |
-| `skills/manage-tickets/` | Ticket ledger CLI (`scripts/tickets.py`, Python stdlib only), worktree `doctor`, and interactive HTML kanban board (`assets/board.html`). |
-| `skills/intent-readiness/` | Structured intent workshop + structural evaluator + human approval gate (`intent.md`). |
-| `skills/spec-readiness/` | Technical specification workshop + evaluator + approval gate (`spec.md`). |
-| `skills/plan-readiness/` | Dependency-aware execution planning workshop + evaluator + approval gate (`plan.md`). |
-| `skills/commit-code-changes/` | Atomic local Git commits that keep new Ticket event files together with the code/docs they describe. |
-| `codex/hooks.json.template` | Codex `SessionStart` (`startup\|resume\|compact`) + `PreCompact` hook template. |
-| `scripts/install.sh` | Workspace-scoped (or opt-in global) installer. |
+| `plugin.json` | Antigravity 插件清单（`sdlc-tickets`）。 |
+| `hooks.json` | Antigravity `SessionStart` Hook：根据 stdin 中的 `cwd` / `workspacePaths` 定位目标仓库并注入当前绑定 Ticket 或开放 Ticket 简表；非 Git 目录静默跳过。 |
+| `rules/AGENTS.md` | 通用 SDLC 路由、阶段门禁与提交约束规则（启用插件即生效）。 |
+| `skills/manage-tickets/` | Ticket 账本 CLI（`scripts/tickets.py`，零第三方依赖、纯 Python 标准库）、worktree 清理前检查 `doctor`、以及自包含 HTML 研发看板（`assets/board.html`）。 |
+| `skills/intent-readiness/` | 意图访谈、结构化校验与人工批准门禁（产出 `intent.md`）。 |
+| `skills/spec-readiness/` | 技术规格工作坊、一致性校验与人工批准门禁（产出 `spec.md`）。 |
+| `skills/plan-readiness/` | 依赖拆解、并行 lane 规划与人工批准门禁（产出 `plan.md`）。 |
+| `skills/commit-code-changes/` | 原子化本地 Git 提交，将新产生的 Ticket 事件文件与对应代码/文档放在同一个 commit。 |
+| `codex/hooks.json.template` | Codex `SessionStart`（`startup\|resume\|compact`）与 `PreCompact` Hook 模板。 |
+| `scripts/install.sh` | 一键安装脚本，支持**单项目工作区安装**（推荐）与全局安装。 |
 
-## Architecture & Continuity Guarantees
+## 两层存储与 Worktree 连续性保证
 
-State is split into two clean layers inside each target repository:
+业务仓库内的数据严格分为两层，互不污染、不丢不乱：
 
-1. **Committed ledger (Git)** — `docs/plans/<ticket-id>/`
-   - `ticket.md`: static header (id, kind, title, parent, goal).
-   - `ticket-events/<timestamp>-<hex>.json`: **one immutable JSON file per milestone event** (`created`, `phase`, `mandate`, `branch`, `task`, `followup`, `integrated`, `handoff`, `decision`).
-   - Current Ticket state is folded deterministically across all worktrees (including uncommitted files) and all local branches (`git ls-tree`), de-duplicated by event ID.
-   - **Zero merge conflicts**: parallel lanes only add new event files; events travel into `main`/`master` with the code they describe.
-2. **Local shared session memory (gitignored)** — `<main-worktree>/.codex/tickets/`
-   - Resolved via `git rev-parse --git-common-dir`, so every worktree of a clone shares the same `sessions/`, `assignments/`, and `checkpoints/` — removing a worktree never loses handoffs.
+1. **提交到 Git 的账本层** — `docs/plans/<ticket-id>/`
+   - `ticket.md`：静态头信息（ID、类型、标题、父 Ticket、目标），创建后基本不改。
+   - `ticket-events/<时间戳>-<随机hex>.json`：**一条不可变事件一个文件**（`created`、`phase`、`mandate`、`branch`、`task`、`followup`、`integrated`、`handoff`、`decision`）。
+   - 当前 Ticket 状态由脚本实时汇总**所有 worktree 工作区（含未提交事件）与所有本地分支树（`git ls-tree`）**中的事件文件并按文件名去重折叠得出。
+   - **合并不冲突**：同一张 Ticket 在多个 worktree 并行推进时只新增不同事件文件；事件随代码一起合入主干（自动识别 `main` / `master`）。
+2. **本地共享的会话交接层（不提交）** — `<主 worktree>/.codex/tickets/`
+   - 通过 `git rev-parse --git-common-dir` 解析到主 worktree，所有 worktree 共享同一份 `sessions/`、`assignments/`、`checkpoints/`，清理 worktree 不会丢失交接记录。
 
-## Installation
+## 安装方式
 
-### Project-scoped install (recommended)
+### 1. 安装到指定项目（推荐，仅对该仓库生效）
 
-Installs the plugin strictly into a single repository (`.agents/plugins/sdlc-tickets/`), so Antigravity discovers it only for that workspace and every worktree/teammate gets the exact same version:
+将插件安装到目标仓库的 `.agents/plugins/sdlc-tickets/`，Antigravity 只在该工作区加载，团队成员和新建 worktree 也能直接共用同一版本：
 
 ```bash
 git clone https://github.com/unirain/sdlc-tickets.git
 ./sdlc-tickets/scripts/install.sh --project /path/to/your-repo --with-codex-hooks
 ```
 
-- **Antigravity**: automatically loads `.agents/plugins/sdlc-tickets/` (skills, `rules/AGENTS.md`, and `hooks.json`).
-- **Codex**: `--with-codex-hooks` writes `.codex/hooks.json` pointing to the installed plugin script. Run `/hooks` once in Codex to trust the project hooks.
+- **Antigravity**：自动发现并启用 `.agents/plugins/sdlc-tickets/`（含 5 个 skill、规则和 `SessionStart` Hook）。
+- **Codex**：加 `--with-codex-hooks` 会同步生成 `.codex/hooks.json` 指向已安装的插件脚本；首次在 Codex 打开该仓库时运行一次 `/hooks` 信任即可。
 
-### Global install (optional, Antigravity only)
+### 2. 全局安装（可选，仅 Antigravity）
+
+如果希望本机所有项目统一启用：
 
 ```bash
 ./sdlc-tickets/scripts/install.sh --global
 ```
 
-Installs into `~/.gemini/config/plugins/sdlc-tickets/` so all workspaces on the machine inherit it.
+安装到 `~/.gemini/config/plugins/sdlc-tickets/`。
 
-## Common Commands
+## 常用命令
 
-All commands run with system `python3` (zero third-party runtime dependencies) from any worktree of the target repository:
+所有命令仅依赖系统 `python3`（无需安装额外依赖），可在目标仓库任意 worktree 下直接运行：
 
 ```bash
 TICKETS="python3 .agents/plugins/sdlc-tickets/skills/manage-tickets/scripts/tickets.py"
 
-# Inspect tickets
-$TICKETS list                     # open tickets
-$TICKETS list --all               # include Done / Cancelled
-$TICKETS show <ticket-id>         # full ticket, mandate, tasks, latest assignment
+# 查看 Ticket
+$TICKETS list                     # 查看所有开放中的 Ticket
+$TICKETS list --all               # 查看全部（含 Done / Cancelled）
+$TICKETS show <ticket-id>         # 查看详情、Mandate、任务清单与最近交接
 
-# Create, route, and track
+# 建单、绑定与交接
 $TICKETS new <slug> --title "..." --goal "..." --attach --session <sid>
 $TICKETS new <slug> --kind fix --parent <parent-id> --title "..."
 $TICKETS attach <ticket-id> --session <sid> --first-request "..."
 $TICKETS handoff --session <sid> --summary "..." --set-next-step "..." --milestone
 
-# Milestones & worktree lifecycle
+# 里程碑与 Worktree 生命周期
 $TICKETS phase <id> Spec|Plan|Executing|Verifying|Done
 $TICKETS mandate <id> --doc docs/plans/<id>/spec.md --task TASK-001 --task TASK-002
 $TICKETS branch <id> --task TASK-001 --purpose "..."
 $TICKETS task <id> TASK-001 --status Done --commit <sha>
-$TICKETS followup <id> --open "Fix edge case"
+$TICKETS followup <id> --open "修复边界问题"
 $TICKETS integrate <id> --branch <feat-branch>
 $TICKETS doctor --before-cleanup /path/to/worktree
 
-# Kanban board
-$TICKETS board                    # static self-contained HTML (.codex/tickets/board/index.html)
-$TICKETS serve --port 8765        # live local board at http://127.0.0.1:8765/
+# 研发看板
+$TICKETS board                    # 生成自包含静态 HTML（默认 .codex/tickets/board/index.html）
+$TICKETS serve --port 8765        # 启动本地实时看板 http://127.0.0.1:8765/
 ```
 
-## R&D Kanban Board
+## 研发可视化看板
 
-The bundled kanban board (`board` / `serve`) renders four stacked, collapsible lanes — **计划中 (Intent / Spec / Plan)**, **进行中 (Executing / Verifying)**, **已完成 (Done)**, and **暂停 · 阻塞 (Paused / Blocked)** — with:
+内置看板（`board` / `serve`）采用从上到下四行可折叠泳道布局：**计划中（Intent / Spec / Plan）**、**进行中（Executing / Verifying）**、**已完成（Done）**、**暂停 · 阻塞（Paused / Blocked）**：
 
-- Per-lane phase filter chips, search, type filter (`feature` / `fix`), and active-branch / risk filters;
-- Scalable **Done** view with period selector (30d / 90d / All), progressive card pagination, month-grouped table view, and optional cancelled toggle;
-- Slide-over detail drawer showing Mandate document SHA-256 fingerprints, TASK progress, branch merge status, latest local assignment, and full event timeline.
+- 支持行内阶段筛选、关键词搜索、按类型（`feature` / `fix`）、进行中分支和风险提示筛选；
+- **已完成**泳道针对大量历史 Ticket 做了可扩展设计：支持近 30 天 / 近 90 天 / 全部时间筛选、卡片分页展开（默认 12 张，点击“再显示”增量加载）、按月分组的紧凑列表视图，以及“含已取消”开关；
+- 点击任意卡片或列表行可打开右侧详情抽屉，查看 Mandate 文档 SHA-256 指纹、TASK 进度、分支合入状态、最近本地交接记录与完整事件时间线。
 
-## Development & Tests
+## 本地测试
 
 ```bash
 pytest tests/test_manage_tickets_skill.py -q
 ```
 
-Tests are fully offline and cover event folding, cross-worktree visibility, conflict-free parallel merges, `doctor` cleanup guards, `master` branch auto-detection, Antigravity & Codex hooks, board rendering, and `install.sh`.
+离线单测覆盖：事件折叠、跨 worktree 未合入进度可见性、多 lane 无冲突合并、`doctor` 清理前保护、`master` 默认分支识别、Antigravity 与 Codex Hook 协议、看板渲染以及 `install.sh` 端到端安装。

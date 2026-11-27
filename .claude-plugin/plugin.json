@@ -1,0 +1,20 @@
+{
+ "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
+ "name": "sdlc-tickets",
+ "displayName": "SDLC Tickets",
+ "version": "0.1.0",
+ "description": "End-to-end SDLC workflow plugin: durable Ticket ledger across sessions, worktrees, and merges, phase-gated intent/spec/plan readiness workshops, atomic Git commits, and an interactive R&D kanban board.",
+ "author": {
+ "name": "Lim Chen"
+ },
+ "homepage": "https://github.com/unirain/sdlc-tickets",
+ "repository": "https://github.com/unirain/sdlc-tickets",
+ "keywords": [
+ "sdlc",
+ "tickets",
+ "workflow",
+ "git",
+ "worktree",
+ "planning"
+ ]
+}

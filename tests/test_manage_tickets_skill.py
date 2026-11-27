@@ -443,3 +443,57 @@ def test_plugin_bundle_and_project_installer(repo: Path) -> None:
         command = codex_hooks["hooks"][hook_name][0]["hooks"][0]["command"]
         assert ".agents/plugins/sdlc-tickets/skills/manage-tickets/scripts/tickets.py" in command
         assert command.endswith(" hook")
+
+
+def test_claude_code_hook_contract(repo: Path) -> None:
+    startup = ok(
+        repo,
+        "hook",
+        "--runtime",
+        "claude",
+        event={"hook_event_name": "SessionStart", "source": "startup", "session_id": "cc-1"},
+    )
+    context = startup["hookSpecificOutput"]["additionalContext"]
+    assert startup["hookSpecificOutput"]["hookEventName"] == "SessionStart"
+    assert "Project workflow rules" in context and "commit-code-changes" in context
+
+    codex = ok(repo, "hook", event={"hook_event_name": "SessionStart", "source": "startup", "session_id": "cc-1"})
+    assert "Project workflow rules" not in codex["hookSpecificOutput"]["additionalContext"]
+
+    ok(repo, "new", "feat-cc", "--title", "Claude", "--attach", "--session", "cc-1")
+    bound = ok(
+        repo,
+        "hook",
+        "--runtime",
+        "claude",
+        event={"hook_event_name": "SessionStart", "source": "resume", "session_id": "cc-1"},
+    )
+    bound_context = bound["hookSpecificOutput"]["additionalContext"]
+    assert "bound to ticket `feat-cc`" in bound_context
+    assert "Project workflow rules" in bound_context
+
+    precompact = run(
+        repo,
+        "hook",
+        "--runtime",
+        "claude",
+        event={"hook_event_name": "PreCompact", "trigger": "manual", "session_id": "cc-1"},
+    )
+    assert precompact.returncode ==0
+    assert precompact.stdout == "" # stdout would become compaction instructions
+    assert list((repo / ".codex/tickets/checkpoints").glob("*cc-1*.json"))
+
+def test_claude_code_plugin_bundle() -> None:
+    manifest = json.loads((ROOT / ".claude-plugin/plugin.json").read_text(encoding="utf-8"))
+    assert manifest["name"] == "sdlc-tickets"
+    marketplace = json.loads((ROOT / ".claude-plugin/marketplace.json").read_text(encoding="utf-8"))
+    assert marketplace["plugins"][0]["name"] == "sdlc-tickets"
+    assert marketplace["plugins"][0]["source"] == "./"
+
+    hooks = json.loads((ROOT / "hooks/hooks.json").read_text(encoding="utf-8"))["hooks"]
+    assert set(hooks) == {"SessionStart", "PreCompact"}
+    assert hooks["SessionStart"][0]["matcher"] == "startup|resume|clear|compact|fork"
+    for name in ("SessionStart", "PreCompact"):
+        command = hooks[name][0]["hooks"][0]["command"]
+        assert "${CLAUDE_PLUGIN_ROOT}" in command
+        assert command.endswith("hook --runtime claude")

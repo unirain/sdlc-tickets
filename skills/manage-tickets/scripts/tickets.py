@@ -1339,6 +1339,20 @@ def script_hint(ctx: Context) -> str:
         return f"python3 {script}"
 
 
+def workflow_rules() -> str:
+    """Plugin-authored routing rules.
+
+    Antigravity loads `rules/AGENTS.md` on its own, but Claude Code does not
+    load plugin-level instruction files, so the same file is injected as
+    SessionStart context instead of being duplicated into a skill.
+    """
+    path = Path(__file__).resolve().parents[3] / "rules" / "AGENTS.md"
+    try:
+        return path.read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+
+
 def bound_context(ctx: Context, key: str, ticket: dict[str, Any], binding: dict[str, Any]) -> str:
     assignment = load_assignment(ctx, ticket["id"], binding["assignment"]) or latest_assignment(ctx, ticket["id"])
     guidance = phase_guidance(ticket["id"], ticket.get("kind"), ticket.get("phase"))
@@ -1425,7 +1439,19 @@ def resolve_hook_context(ctx: Context, args: argparse.Namespace, event: dict[str
     return ctx
 
 
-def cmd_hook(ctx: Context, args: argparse.Namespace, runtime: str = "auto") -> dict[str, Any]:
+def session_context_for_runtime(context: str, runtime: str) -> str:
+    """Claude Code cannot load a plugin-level rules file, so inject it with the ticket state."""
+    if runtime != "claude":
+        return context
+    rules = workflow_rules()
+    if not rules:
+        return context
+    return bounded(f"{context}\n\n## Project workflow rules\n\n{rules}")
+
+
+def cmd_hook(
+    ctx: Context, args: argparse.Namespace, runtime: str = "auto"
+) -> dict[str, Any] | None:
     event = read_hook_input()
     is_agy = runtime == "antigravity" or (
         runtime == "auto" and ("hookEventName" in event or "conversationId" in event)
@@ -1463,9 +1489,12 @@ def cmd_hook(ctx: Context, args: argparse.Namespace, runtime: str = "auto") -> d
                     "assignment": assignment,
                 },
             )
+        if runtime == "claude":
+            # Claude Code treats hook stdout as summary instructions; stay silent.
+            return None
         return {"continue": True}
     if name == "SessionStart":
-        context = session_start_context(ctx, key)
+        context = session_context_for_runtime(session_start_context(ctx, key), runtime)
         return {
             "continue": True,
             "hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": context},
@@ -1702,8 +1731,8 @@ def build_parser() -> argparse.ArgumentParser:
     serve.add_argument("--port", type=int, default=8765)
 
     sub.add_parser("path", help="Print the shared local state directory.")
-    hook = sub.add_parser("hook", help="Handle a Codex or Antigravity lifecycle Hook event from stdin.")
-    hook.add_argument("--runtime", choices=("auto", "codex", "antigravity"), default="auto")
+    hook = sub.add_parser("hook", help="Handle a Claude Code, Codex, or Antigravity lifecycle Hook event from stdin.")
+    hook.add_argument("--runtime", choices=("auto", "claude", "codex", "antigravity"), default="auto")
     return parser
 
 
@@ -1731,10 +1760,13 @@ def main(argv: list[str] | None = None) -> int:
         ctx = build_context(args)
         if args.command == "hook":
             try:
-                emit_json(cmd_hook(ctx, args, runtime=args.runtime))
+                payload = cmd_hook(ctx, args, runtime=args.runtime)
+                if payload is not None:
+                    emit_json(payload)
             except Exception as exc:  # Hooks must never break the session.
                 print(f"warning: ticket hook failed: {exc}", file=sys.stderr)
-                emit_json({} if args.runtime == "antigravity" else {"continue": True})
+                if args.runtime == "codex":
+                    emit_json({"continue": True})
             return 0
         if args.command == "path":
             print(ctx.state_dir)

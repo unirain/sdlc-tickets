@@ -1,0 +1,16 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "unirain",
+  "owner": {
+    "name": "unirain"
+  },
+  "description": "SDLC workflow plugins by unirain: durable ticket ledger, readiness gates, atomic commits, and an R&D kanban.",
+  "plugins": [
+    {
+      "name": "sdlc-tickets",
+      "source": "./",
+      "description": "Durable Ticket ledger, phase-gated Intent/Spec/Plan readiness workshops, atomic commits, and an R&D kanban board.",
+      "version": "0.1.0"
+    }
+  ]
+}

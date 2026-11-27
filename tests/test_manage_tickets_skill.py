@@ -443,3 +443,42 @@ def test_plugin_bundle_and_project_installer(repo: Path) -> None:
         command = codex_hooks["hooks"][hook_name][0]["hooks"][0]["command"]
         assert ".agents/plugins/sdlc-tickets/skills/manage-tickets/scripts/tickets.py" in command
         assert command.endswith(" hook")
+
+
+def test_claude_code_hook_contract(repo: Path) -> None:
+    startup = ok(
+        repo,
+        "hook",
+        "--runtime",
+        "claude",
+        event={"hook_event_name": "SessionStart", "source": "startup", "session_id": "cc-1"},
+    )
+    context = startup["hookSpecificOutput"]["additionalContext"]
+    assert startup["hookSpecificOutput"]["hookEventName"] == "SessionStart"
+    assert "Project workflow rules" in context and "commit-code-changes" in context
+
+    codex = ok(repo, "hook", event={"hook_event_name": "SessionStart", "source": "startup", "session_id": "cc-1"})
+    assert "Project workflow rules" not in codex["hookSpecificOutput"]["additionalContext"]
+
+    ok(repo, "new", "feat-cc", "--title", "Claude", "--attach", "--session", "cc-1")
+    bound = ok(
+        repo,
+        "hook",
+        "--runtime",
+        "claude",
+        event={"hook_event_name": "SessionStart", "source": "resume", "session_id": "cc-1"},
+    )
+    bound_context = bound["hookSpecificOutput"]["additionalContext"]
+    assert "bound to ticket `feat-cc`" in bound_context
+    assert "Project workflow rules" in bound_context
+
+    precompact = run(
+        repo,
+        "hook",
+        "--runtime",
+        "claude",
+        event={"hook_event_name": "PreCompact", "trigger": "manual", "session_id": "cc-1"},
+    )
+    assert precompact.returncode ==0
+    assert precompact.stdout == "" # stdout would become compaction instructions
+    assert list((repo / ".codex/tickets/checkpoints").glob("*cc-1*.json"))

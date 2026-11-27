@@ -1,0 +1,30 @@
+{
+ "hooks": {
+ "SessionStart": [
+ {
+ "matcher": "startup|resume|clear|compact|fork",
+ "hooks": [
+ {
+ "type": "command",
+ "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/skills/manage-tickets/scripts/tickets.py\" hook --runtime claude",
+ "timeout":15,
+ "statusMessage": "Loading ticket context"
+ }
+ ]
+ }
+ ],
+ "PreCompact": [
+ {
+ "matcher": "manual|auto",
+ "hooks": [
+ {
+ "type": "command",
+ "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/skills/manage-tickets/scripts/tickets.py\" hook --runtime claude",
+ "timeout":10,
+ "statusMessage": "Checkpointing ticket assignment"
+ }
+ ]
+ }
+ ]
+ }
+}

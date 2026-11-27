@@ -482,3 +482,18 @@ def test_claude_code_hook_contract(repo: Path) -> None:
     assert precompact.returncode ==0
     assert precompact.stdout == "" # stdout would become compaction instructions
     assert list((repo / ".codex/tickets/checkpoints").glob("*cc-1*.json"))
+
+def test_claude_code_plugin_bundle() -> None:
+    manifest = json.loads((ROOT / ".claude-plugin/plugin.json").read_text(encoding="utf-8"))
+    assert manifest["name"] == "sdlc-tickets"
+    marketplace = json.loads((ROOT / ".claude-plugin/marketplace.json").read_text(encoding="utf-8"))
+    assert marketplace["plugins"][0]["name"] == "sdlc-tickets"
+    assert marketplace["plugins"][0]["source"] == "./"
+
+    hooks = json.loads((ROOT / "hooks/hooks.json").read_text(encoding="utf-8"))["hooks"]
+    assert set(hooks) == {"SessionStart", "PreCompact"}
+    assert hooks["SessionStart"][0]["matcher"] == "startup|resume|clear|compact|fork"
+    for name in ("SessionStart", "PreCompact"):
+        command = hooks[name][0]["hooks"][0]["command"]
+        assert "${CLAUDE_PLUGIN_ROOT}" in command
+        assert command.endswith("hook --runtime claude")

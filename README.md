@@ -40,6 +40,7 @@
 | `skills/spec-readiness/` | 技术规格工作坊、一致性校验与人工批准门禁（产出 `spec.md`）。 |
 | `skills/plan-readiness/` | 依赖拆解、并行 lane 规划与人工批准门禁（产出 `plan.md`）。 |
 | `skills/commit-code-changes/` | 原子化本地 Git 提交，将新产生的 Ticket 事件文件与对应代码/文档放在同一个 commit。 |
+| `skills/board/` | 看板入口 skill：`/sdlc-tickets:board` 一条命令生成并打开看板，也说明实时 `serve` 与发布方式。 |
 | `codex/hooks.json.template` | Codex `SessionStart`（`startup\|resume\|compact`）与 `PreCompact` Hook 模板。 |
 | `scripts/install.sh` | 一键安装脚本，支持**单项目工作区安装**（推荐）与全局安装。 |
 
@@ -137,13 +138,15 @@ python3 ~/.claude/plugins/cache/unirain/sdlc-tickets/0.1.0/skills/manage-tickets
 | `spec-readiness` | `/sdlc-tickets:spec-readiness` | 技术规格工作坊与人工批准（产出 `spec.md`） |
 | `plan-readiness` | `/sdlc-tickets:plan-readiness` | 依赖拆解、并行 lane 规划（产出 `plan.md`） |
 | `commit-code-changes` | `/sdlc-tickets:commit-code-changes` | 原子提交，Ticket 事件随代码同一 commit |
+| `board` | `/sdlc-tickets:board` | 生成看板并直接打开 |
 
 4. **压缩前后不丢线。** `PreCompact` 在压缩前把绑定与交接写入 `.codex/tickets/checkpoints/`，且在 Claude Code 下不输出任何内容，避免被当作压缩摘要的指令；压缩后 `SessionStart`（`source: compact`）立即恢复该 Ticket 的上下文。
 5. **提交与合入。** 用 `commit-code-changes` 提交，`docs/plans/<id>/ticket-events/*.json` 与对应代码放在同一个 commit，永远不要提交 `.codex/tickets/`；合回主干后执行 `integrate`。
-6. **看板。** 直接说“打开 ticket 看板”，或用注入内容里的脚本路径：
+6. **看板。** 输入 `/sdlc-tickets:board` 即可生成并直接打开看板（等价于说“打开 ticket 看板”）；也可用注入内容里的脚本路径手动执行：
 
 ```bash
-$TICKETS board    # 生成静态 HTML（.codex/tickets/board/index.html）
+$TICKETS board --open    # 生成静态 HTML 并直接打开
+$TICKETS board           # 只生成，输出 output 路径
 $TICKETS serve --port 8765  # 实时看板 http://127.0.0.1:8765/
 ```
 
@@ -179,10 +182,13 @@ $TICKETS doctor --before-cleanup /path/to/worktree
 
 # 研发看板
 $TICKETS board                    # 生成自包含静态 HTML（默认 .codex/tickets/board/index.html）
+$TICKETS board --open             # 生成后直接在浏览器/查看器中打开
 $TICKETS serve --port 8765        # 启动本地实时看板 http://127.0.0.1:8765/
 ```
 
 ## 研发可视化看板
+
+一条命令即可打开：`/sdlc-tickets:board`（也可在任意 skill 里执行 `board --open`）。
 
 内置看板（`board` / `serve`）采用从上到下四行可折叠泳道布局：**计划中（Intent / Spec / Plan）**、**进行中（Executing / Verifying）**、**已完成（Done）**、**暂停 · 阻塞（Paused / Blocked）**：
 
@@ -196,4 +202,4 @@ $TICKETS serve --port 8765        # 启动本地实时看板 http://127.0.0.1:87
 pytest tests/test_manage_tickets_skill.py -q
 ```
 
-离线单测覆盖：事件折叠、跨 worktree 未合入进度可见性、多 lane 无冲突合并、`doctor` 清理前保护、`master` 默认分支识别、Antigravity 与 Codex Hook 协议、看板渲染以及 `install.sh` 端到端安装。
+离线单测覆盖：事件折叠、跨 worktree 未合入进度可见性、多 lane 无冲突合并、`doctor` 清理前保护、`master` 默认分支识别、Antigravity 与 Codex Hook 协议、看板渲染与看板打开、Claude Code Hook 协议、以及 `install.sh` 端到端安装。

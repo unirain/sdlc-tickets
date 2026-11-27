@@ -268,10 +268,33 @@ def test_board_renders_self_contained_html(repo: Path, tmp_path: Path) -> None:
     data = tmp_path / "board.json"
     result = ok(repo, "board", "--output", str(output), "--json-output", str(data))
     assert result["tickets"] == 1
+    assert result["opened"] is None
     html = output.read_text(encoding="utf-8")
     assert "/*__BOARD_DATA__*/" not in html and "feat-h" in html
     assert "</script>alert" not in html  # embedded data cannot close the script tag
     assert json.loads(data.read_text())["tickets"][0]["id"] == "feat-h"
+
+
+def test_board_opens_rendered_html(repo: Path, tmp_path: Path) -> None:
+    recorder = tmp_path / "opener.sh"
+    log = tmp_path / "opened.txt"
+    recorder.write_text(
+        "#!/bin/sh\nprintf '%s' \"$1\" > " + str(log) + "\n", encoding="utf-8"
+    )
+    recorder.chmod(0o755)
+    output = tmp_path / "board.html"
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), "--project-root", str(repo), "board", "--output", str(output), "--open"],
+        cwd=repo,
+        env={**env(), "TICKETS_OPENER": str(recorder)},
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["opened"] is True
+    assert log.read_text(encoding="utf-8") == str(output)
+    assert output.is_file()
 
 
 def test_invalid_ids_and_event_files_are_rejected(repo: Path) -> None:
@@ -415,6 +438,7 @@ def test_plugin_bundle_and_project_installer(repo: Path) -> None:
         "spec-readiness",
         "plan-readiness",
         "commit-code-changes",
+        "board",
     ):
         assert (ROOT / "skills" / skill / "SKILL.md").is_file()
     assert (ROOT / "rules/AGENTS.md").is_file()
